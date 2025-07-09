@@ -26,7 +26,9 @@ const Login = () => {
     setLoading(true);
 
     try {
+      console.log('About to call login with:', formData.email);  
       const result = await login(formData.email, formData.password);
+      console.log('Login result:', result);
       
       if (result.success) {
         toast.success('Logged in successfully!');
@@ -35,6 +37,7 @@ const Login = () => {
         toast.error(result.error || 'Login failed');
       }
     } catch (error) {
+      console.error('Login error:', error);  
       toast.error('Something went wrong');
     } finally {
       setLoading(false);
