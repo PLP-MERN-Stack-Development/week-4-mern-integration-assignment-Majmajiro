@@ -1,6 +1,27 @@
-// Post.js - Mongoose model for blog posts
+// models/Post.js - Mongoose model for blog posts
+import mongoose from 'mongoose';
 
-const mongoose = require('mongoose');
+// Optional: One could break out comment schema if reused
+const commentSchema = new mongoose.Schema(
+  {
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
+    },
+    content: {
+      type: String,
+      required: true,
+      trim: true,
+      maxlength: [500, 'Comment cannot exceed 500 characters'],
+    },
+    createdAt: {
+      type: Date,
+      default: Date.now,
+    },
+  },
+  { _id: false }
+);
 
 const PostSchema = new mongoose.Schema(
   {
@@ -20,7 +41,6 @@ const PostSchema = new mongoose.Schema(
     },
     slug: {
       type: String,
-      required: true,
       unique: true,
     },
     excerpt: {
@@ -46,37 +66,23 @@ const PostSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
-    comments: [
-      {
-        user: {
-          type: mongoose.Schema.Types.ObjectId,
-          ref: 'User',
-        },
-        content: {
-          type: String,
-          required: true,
-        },
-        createdAt: {
-          type: Date,
-          default: Date.now,
-        },
-      },
-    ],
+    comments: [commentSchema],
   },
   { timestamps: true }
 );
 
-// Create slug from title before saving
+// Generate slug automatically - FIXED VERSION
 PostSchema.pre('save', function (next) {
-  if (!this.isModified('title')) {
-    return next();
+  // Always generate slug if title exists and slug doesn't exist, or if title was modified
+  if (this.title && (!this.slug || this.isModified('title'))) {
+    let baseSlug = this.title
+      .toLowerCase()
+      .replace(/[^\w ]+/g, '')
+      .replace(/ +/g, '-');
+    
+    this.slug = baseSlug;
   }
   
-  this.slug = this.title
-    .toLowerCase()
-    .replace(/[^\w ]+/g, '')
-    .replace(/ +/g, '-');
-    
   next();
 });
 
@@ -85,16 +91,17 @@ PostSchema.virtual('url').get(function () {
   return `/posts/${this.slug}`;
 });
 
-// Method to add a comment
+// Add a comment to post
 PostSchema.methods.addComment = function (userId, content) {
   this.comments.push({ user: userId, content });
   return this.save();
 };
 
-// Method to increment view count
+// Increment view count
 PostSchema.methods.incrementViewCount = function () {
   this.viewCount += 1;
   return this.save();
 };
 
-module.exports = mongoose.model('Post', PostSchema); 
+const Post = mongoose.model('Post', PostSchema);
+export default Post;
