@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
+import { toast } from 'react-toastify';
 
 function Categories() {
   const [categories, setCategories] = useState([]);
   const [newCategory, setNewCategory] = useState('');
   const [error, setError] = useState(null);
 
-  // Fetch categories on initial load
+  // 🔄 Fetch categories on component mount
   useEffect(() => {
     fetch('/api/categories')
       .then((res) => res.json())
@@ -13,13 +14,15 @@ function Categories() {
         const sorted = data.sort((a, b) => a.name.localeCompare(b.name));
         setCategories(sorted);
       })
-      .catch((err) => console.error('Error fetching categories:', err));
+      .catch((err) => {
+        console.error('Error fetching categories:', err);
+        toast.error('Failed to load categories');
+      });
   }, []);
 
-  // Add new category
+  // ➕ Add new category
   const handleAddCategory = async (e) => {
     e.preventDefault();
-
     const trimmedName = newCategory.trim();
     if (!trimmedName) {
       setError('Category name is required.');
@@ -50,13 +53,16 @@ function Categories() {
       );
       setNewCategory('');
       setError(null);
+      toast.success(`Category "${data.name}" added`);
     } catch (err) {
       setError(err.message);
+      toast.error(err.message);
     }
   };
 
-  // Delete category
-  const handleDeleteCategory = async (id) => {
+  // ❌ Delete category
+  const handleDeleteCategory = async (id, name) => {
+    if (!window.confirm(`Delete category "${name}"?`)) return;
     try {
       const res = await fetch(`/api/categories/${id}`, {
         method: 'DELETE',
@@ -69,33 +75,58 @@ function Categories() {
 
       setCategories((prev) => prev.filter((cat) => cat._id !== id));
       setError(null);
+      toast.success(`Deleted "${name}"`);
     } catch (err) {
       setError(err.message);
+      toast.error(err.message);
     }
   };
 
   return (
-    <div style={{ padding: '2rem', maxWidth: '600px', margin: 'auto' }}>
-      <h1 style={{ color: '#008080', fontSize: '2rem', marginBottom: '1rem' }}>
+    <div
+      style={{
+        padding: '2rem 1rem',
+        maxWidth: '600px',
+        margin: '0 auto',
+        boxSizing: 'border-box',
+      }}
+    >
+      <h1
+        style={{
+          color: '#008080',
+          fontSize: '2rem',
+          marginBottom: '1rem',
+          textAlign: 'center',
+        }}
+      >
         🗂 Categories
       </h1>
 
-      <form onSubmit={handleAddCategory} style={{ marginBottom: '1.5rem' }}>
+      {/* 🔧 Add Category Form */}
+      <form
+        onSubmit={handleAddCategory}
+        style={{
+          marginBottom: '1.5rem',
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: '0.5rem',
+          justifyContent: 'center',
+        }}
+      >
         <input
           type="text"
           placeholder="New category name"
           value={newCategory}
           onChange={(e) => {
-          setNewCategory(e.target.value);
-        if (error) setError(null);
+            setNewCategory(e.target.value);
+            if (error) setError(null);
           }}
-
           style={{
+            flex: '1 1 200px',
+            minWidth: '180px',
             padding: '0.5rem',
-            width: '70%',
             borderRadius: '4px',
             border: '1px solid #ccc',
-            marginRight: '0.5rem',
           }}
         />
         <button
@@ -112,14 +143,25 @@ function Categories() {
           Add
         </button>
         {error && (
-          <p style={{ color: 'red', marginTop: '0.5rem' }}>{error}</p>
+          <p style={{ color: 'red', width: '100%', textAlign: 'center' }}>
+            {error}
+          </p>
         )}
       </form>
 
+      {/* 📋 Category List */}
       {categories.length === 0 ? (
-        <p style={{ color: '#2F4F4F' }}>No categories found.</p>
+        <p style={{ color: '#2F4F4F', textAlign: 'center' }}>
+          No categories found.
+        </p>
       ) : (
-        <ul style={{ listStyle: 'none', padding: 0 }}>
+        <ul
+          style={{
+            listStyle: 'none',
+            padding: 0,
+            margin: 0,
+          }}
+        >
           {categories.map((cat, index) => (
             <li
               key={cat._id || cat.name || index}
@@ -134,17 +176,21 @@ function Categories() {
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
+                flexWrap: 'wrap',
               }}
             >
-              {cat.name}
+              <span style={{ flex: '1 1 auto', wordBreak: 'break-word' }}>
+                {cat.name}
+              </span>
               <button
-                onClick={() => handleDeleteCategory(cat._id)}
+                onClick={() => handleDeleteCategory(cat._id, cat.name)}
                 style={{
                   background: 'transparent',
                   border: 'none',
                   color: 'red',
                   fontSize: '1.2rem',
                   cursor: 'pointer',
+                  marginLeft: '1rem',
                 }}
                 title="Delete category"
               >

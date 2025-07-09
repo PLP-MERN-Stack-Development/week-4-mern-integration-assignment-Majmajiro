@@ -1,22 +1,19 @@
-import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { usePosts } from '../context/PostContext';
 
 function Home() {
-  const [posts, setPosts] = useState([]);
-
-  useEffect(() => {
-    fetch('/api/posts')
-      .then(res => res.json())
-      .then(data => setPosts(data))
-      .catch(err => console.error('❌ Error fetching posts:', err));
-  }, []);
+  const { posts, loading, error } = usePosts();
 
   return (
     <div style={{ padding: '2rem', maxWidth: '800px', margin: 'auto' }}>
       <h1 style={{ color: '#008080', fontSize: '2rem', marginBottom: '1.5rem' }}>
         📚 Blog Posts
       </h1>
-      {posts.length === 0 ? (
+
+      {loading && <p style={{ color: '#999' }}>Loading posts...</p>}
+      {error && <p style={{ color: 'red' }}>Error: {error}</p>}
+
+      {posts.length === 0 && !loading ? (
         <p style={{ color: '#2F4F4F' }}>No posts found.</p>
       ) : (
         posts.map(post => (
@@ -31,7 +28,6 @@ function Home() {
               boxShadow: '0 2px 6px rgba(0,0,0,0.05)',
             }}
           >
-
             <h2 style={{ color: '#008080', marginBottom: '0.5rem' }}>
               <Link to={`/posts/${post._id}`} style={{ textDecoration: 'none', color: '#008080' }}>
                 {post.title}

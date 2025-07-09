@@ -1,74 +1,109 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { usePosts } from '../context/PostContext';
 import useFetch from '../hooks/useFetch';
 
 function PostForm() {
   const { id } = useParams();
   const isEditing = Boolean(id);
   const navigate = useNavigate();
+  const [image, setImage] = useState('');
+  const [uploading, setUploading] = useState(false);
+
+  const { posts, addPost, editPost } = usePosts();
 
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [category, setCategory] = useState('');
-  const [error, setError] = useState(null);
+
+  const [titleError, setTitleError] = useState('');
+  const [contentError, setContentError] = useState('');
+  const [categoryError, setCategoryError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
 
-  // ✅ Fetch categories using hook
-  const { data: categories = [], loading: categoriesLoading, error: categoriesError } = useFetch('/api/categories');
+  const { data: categories = [], loading: categoriesLoading } = useFetch('/api/categories');
 
-  // ✅ Fetch post data only when editing
-  const {
-    data: post,
-    loading: postLoading,
-    error: postError,
-  } = useFetch(`/api/posts/${id}`, {}, !isEditing);
-
-  // ✅ Sync fetched post to form fields
   useEffect(() => {
-    if (post) {
-      setTitle(post.title);
-      setContent(post.content);
-      setCategory(post.category);
+    if (isEditing) {
+      const found = posts.find(p => p._id === id);
+      if (found) {
+        setTitle(found.title);
+        setContent(found.content);
+        setCategory(found.category);
+        if (found.image) setImage(found.image); // 🖼 preload image
+      }
     }
-  }, [post]);
+  }, [id, posts, isEditing]);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-
-    if (!title.trim() || !content.trim() || !category) {
-      setError('All fields are required.');
-      return;
+  const validateFields = () => {
+    let valid = true;
+    if (title.trim().length < 5) {
+      setTitleError('Title must be at least 5 characters.');
+      valid = false;
     }
+    if (!content.trim()) {
+      setContentError('Content is required.');
+      valid = false;
+    }
+    if (!category) {
+      setCategoryError('Please select a category.');
+      valid = false;
+    }
+    return valid;
+  };
 
-    setSubmitting(true);
+  const handleImageUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('image', file);
+
+    setUploading(true);
     try {
-      const method = isEditing ? 'PUT' : 'POST';
-      const endpoint = isEditing ? `/api/posts/${id}` : '/api/posts';
-
-      const res = await fetch(endpoint, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, content, category }),
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
       });
 
       const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to save post');
-      }
-
-      setSuccess(true);
-      setTimeout(() => navigate(`/posts/${data._id}`), 1500);
+      setImage(data.path); // 📁 Set image path (e.g., /uploads/filename.jpg)
     } catch (err) {
-      setError(err.message);
+      console.error('Image upload failed', err);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setTitleError('');
+    setContentError('');
+    setCategoryError('');
+
+    if (!validateFields()) return;
+
+    const postData = { title, content, category, image };
+
+    setSubmitting(true);
+    try {
+      if (isEditing) {
+        await editPost(id, postData);
+        setSuccess(true);
+        setTimeout(() => navigate(`/posts/${id}`), 1500);
+      } else {
+        const newPost = await addPost(postData);
+        setSuccess(true);
+        setTimeout(() => navigate(`/posts/${newPost._id}`), 1500);
+      }
+    } catch (err) {
+      console.error(err);
     } finally {
       setSubmitting(false);
     }
   };
 
-  // ✅ Handle loading state clearly
-  if (postLoading) return <p style={{ padding: '2rem' }}>Loading post...</p>;
   if (categoriesLoading) return <p style={{ padding: '2rem' }}>Loading categories...</p>;
 
   return (
@@ -77,21 +112,22 @@ function PostForm() {
         {isEditing ? '✏️ Edit Post' : '✍️ Create New Post'}
       </h1>
 
-      {error && <p style={{ color: 'red', marginBottom: '1rem' }}>{error}</p>}
-      {success && <p style={{ color: 'green', marginBottom: '1rem' }}>✅ Post saved successfully!</p>}
+      {success && (
+        <p style={{ color: 'green', marginBottom: '1rem' }}>
+          ✅ Post saved successfully!
+        </p>
+      )}
 
       <form onSubmit={handleSubmit}>
-        {/* Title Input */}
+        {/* Title */}
         <div style={{ marginBottom: '1rem' }}>
-          <label style={{ display: 'block', color: '#2F4F4F', marginBottom: '0.5rem' }}>
-            Title
-          </label>
+          <label>Title</label>
           <input
             type="text"
             value={title}
             onChange={(e) => {
               setTitle(e.target.value);
-              setError(null);
+              if (titleError) setTitleError('');
             }}
             style={{
               width: '100%',
@@ -100,19 +136,18 @@ function PostForm() {
               borderRadius: '4px',
             }}
           />
+          {titleError && <p style={{ color: 'red', marginTop: '0.25rem' }}>{titleError}</p>}
         </div>
 
-        {/* Content Textarea */}
+        {/* Content */}
         <div style={{ marginBottom: '1rem' }}>
-          <label style={{ display: 'block', color: '#2F4F4F', marginBottom: '0.5rem' }}>
-            Content
-          </label>
+          <label>Content</label>
           <textarea
             rows="6"
             value={content}
             onChange={(e) => {
               setContent(e.target.value);
-              setError(null);
+              if (contentError) setContentError('');
             }}
             style={{
               width: '100%',
@@ -121,18 +156,17 @@ function PostForm() {
               borderRadius: '4px',
             }}
           ></textarea>
+          {contentError && <p style={{ color: 'red', marginTop: '0.25rem' }}>{contentError}</p>}
         </div>
 
-        {/* Category Dropdown */}
+        {/* Category */}
         <div style={{ marginBottom: '1rem' }}>
-          <label style={{ display: 'block', color: '#2F4F4F', marginBottom: '0.5rem' }}>
-            Category
-          </label>
+          <label>Category</label>
           <select
             value={category}
             onChange={(e) => {
               setCategory(e.target.value);
-              setError(null);
+              if (categoryError) setCategoryError('');
             }}
             style={{
               width: '100%',
@@ -148,15 +182,32 @@ function PostForm() {
               </option>
             ))}
           </select>
+          {categoryError && <p style={{ color: 'red', marginTop: '0.25rem' }}>{categoryError}</p>}
         </div>
 
-        {/* Submit Button */}
+        {/* Image Upload */}
+        <div style={{ marginBottom: '1rem' }}>
+          <label>Featured Image</label>
+          <input type="file" accept="image/*" onChange={handleImageUpload} />
+          {uploading && <p>Uploading image...</p>}
+          {image && (
+            <div style={{ marginTop: '0.5rem' }}>
+              <img
+                src={image}
+                alt="Preview"
+                style={{ width: '100%', borderRadius: '6px', maxHeight: '250px', objectFit: 'cover' }}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Submit */}
         <button
           type="submit"
           disabled={submitting}
           style={{
             backgroundColor: submitting ? '#ccc' : '#FFA500',
-            color: '#fff',
+            color: 'white',
             padding: '0.6rem 1.2rem',
             border: 'none',
             borderRadius: '4px',
@@ -173,3 +224,4 @@ function PostForm() {
 }
 
 export default PostForm;
+
